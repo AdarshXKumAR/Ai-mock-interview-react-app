@@ -31,6 +31,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/config/firebase.config";
+import { extractTextFromDocument, validateResumeFile } from "@/lib/resume-extractor";
+import { Upload, X } from "lucide-react";
 
 interface FormMockInterviewProps {
   initialData: Interview | null;
@@ -46,6 +48,7 @@ const formSchema = z.object({
     .number()
     .min(0, "Experience cannot be empty or negative"),
   techStack: z.string().min(1, "Tech stack must be at least a character"),
+  resumeText: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -58,6 +61,8 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
 
   const { isValid, isSubmitting } = form.formState;
   const [loading, setLoading] = useState(false);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [extractingResume, setExtractingResume] = useState(false);
   const navigate = useNavigate();
   const { userId } = useAuth();
 
@@ -95,7 +100,38 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
   };
 
   const generateAiResponse = async (data: FormData) => {
-    const prompt = `
+    let prompt = '';
+
+    if (data.resumeText && data.resumeText.trim().length > 0) {
+      prompt = `
+        As an experienced prompt engineer, generate a JSON array containing 5 technical interview questions along with detailed, conversational answers based on the following job information and candidate's resume. Each object in the array should have the fields "question" and "answer", formatted as follows:
+
+        [
+          { "question": "<Question text>", "answer": "<Answer text>" },
+          ...
+        ]
+
+        Job Information:
+        - Job Position: ${data?.position}
+        - Job Description: ${data?.description}
+        - Years of Experience Required: ${data?.experience}
+        - Tech Stacks: ${data?.techStack}
+
+        Candidate's Resume:
+        ${data.resumeText}
+
+        IMPORTANT REQUIREMENTS:
+        - Generate exactly 5 questions total
+        - At least 2 questions MUST be based specifically on the candidate's resume (projects, experience, skills mentioned in the resume)
+        - The remaining 3 questions should be based on the job position and tech stack
+        - The questions should test practical understanding, reasoning, and real-world experience
+
+        Make sure the answers are phrased in a **natural, spoken style**, as if the candidate is **explaining verbally during an interview** — not reading or describing code directly. Use phrases like "So basically…", "What I'd do is…", or "The idea here is…" where appropriate to sound human and fluent.
+
+        Return only the JSON array with the questions and verbal-style answers. No extra text, code blocks, or labels.
+      `;
+    } else {
+      prompt = `
         As an experienced prompt engineer, generate a JSON array containing 5 technical interview questions along with detailed, conversational answers based on the following job information. Each object in the array should have the fields "question" and "answer", formatted as follows:
 
         [
@@ -109,12 +145,13 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
         - Years of Experience Required: ${data?.experience}
         - Tech Stacks: ${data?.techStack}
 
-        The questions should test practical understanding, reasoning, and real-world experience with ${data?.techStack}. 
+        The questions should test practical understanding, reasoning, and real-world experience with ${data?.techStack}.
 
-        Make sure the answers are phrased in a **natural, spoken style**, as if the candidate is **explaining verbally during an interview** — not reading or describing code directly. Use phrases like “So basically…”, “What I’d do is…”, or “The idea here is…” where appropriate to sound human and fluent.
+        Make sure the answers are phrased in a **natural, spoken style**, as if the candidate is **explaining verbally during an interview** — not reading or describing code directly. Use phrases like "So basically…", "What I'd do is…", or "The idea here is…" where appropriate to sound human and fluent.
 
         Return only the JSON array with the questions and verbal-style answers. No extra text, code blocks, or labels.
       `;
+    }
 
     const aiResult = await chatSession.sendMessage(prompt);
     const cleanedResponse = cleanAiResponse(aiResult.response.text());
@@ -165,6 +202,48 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
     }
   };
 
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateResumeFile(file);
+    if (!validation.valid) {
+      toast.error('Invalid file', { description: validation.error });
+      return;
+    }
+
+    try {
+      setExtractingResume(true);
+      const extractedText = await extractTextFromDocument(file);
+
+      if (extractedText.length < 50) {
+        toast.error('Resume too short', {
+          description: 'Could not extract enough text from resume. Please check the file.'
+        });
+        return;
+      }
+
+      setResumeFile(file);
+      form.setValue('resumeText', extractedText);
+      toast.success('Resume uploaded', {
+        description: 'Resume text extracted successfully'
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error('Extraction failed', {
+        description: error instanceof Error ? error.message : 'Failed to extract text from resume'
+      });
+    } finally {
+      setExtractingResume(false);
+    }
+  };
+
+  const handleRemoveResume = () => {
+    setResumeFile(null);
+    form.setValue('resumeText', '');
+    toast.info('Resume removed');
+  };
+
   useEffect(() => {
     if (initialData) {
       form.reset({
@@ -172,6 +251,7 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
         description: initialData.description,
         experience: initialData.experience,
         techStack: initialData.techStack,
+        resumeText: initialData.resumeText || '',
       });
     }
   }, [initialData, form]);
@@ -290,6 +370,64 @@ export const FormMockInterview = ({ initialData }: FormMockInterviewProps) => {
               </FormItem>
             )}
           />
+
+          <div className="w-full space-y-4">
+            <div className="w-full flex items-center justify-between">
+              <FormLabel>Resume (Optional)</FormLabel>
+              {resumeFile && (
+                <span className="text-xs text-muted-foreground">
+                  {resumeFile.name}
+                </span>
+              )}
+            </div>
+
+            {resumeFile ? (
+              <div className="flex items-center gap-2 p-4 border rounded-lg bg-muted/50">
+                <div className="flex-1 flex items-center gap-2">
+                  <Upload className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm truncate">{resumeFile.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({(resumeFile.size / 1024).toFixed(1)} KB)
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={handleRemoveResume}
+                  disabled={loading || extractingResume}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".pdf,.txt"
+                  onChange={handleResumeUpload}
+                  disabled={loading || extractingResume}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  id="resume-upload"
+                />
+                <label
+                  htmlFor="resume-upload"
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                >
+                  <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    {extractingResume ? 'Extracting text...' : 'Click to upload resume'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    PDF or TXT (max 5MB)
+                  </p>
+                </label>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Upload your resume to get personalized questions. At least 2 questions will be based on your resume.
+            </p>
+          </div>
 
           <div className="w-full flex items-center justify-end gap-6">
             <Button
