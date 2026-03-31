@@ -14,6 +14,9 @@ import { CreateEditPage } from "./routes/create-edit-page";
 import { MockLoadPage } from "./routes/mock-load-page";
 import { MockInterviewPage } from "./routes/mock-interview-page";
 import { Feedback } from "./routes/feedback";
+import { JobsPage } from "./routes/jobs/index.tsx";
+import { JobFinderPage } from "./routes/jobs/job-finder.tsx";
+import { JobCompatibilityPage } from "./routes/jobs/job-compatibility.tsx";
 
 const App = () => {
   return (
@@ -38,7 +41,7 @@ const App = () => {
             </ProtectRoutes>
           }
         >
-          {/* add all the protect routes */}
+          {/* mock interview routes */}
           <Route element={<Generate />} path="/generate">
             <Route index element={<Dashboard />} />
             <Route path=":interviewId" element={<CreateEditPage />} />
@@ -49,6 +52,11 @@ const App = () => {
             />
             <Route path="feedback/:interviewId" element={<Feedback />} />
           </Route>
+
+          {/* jobs routes */}
+          <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/jobs/finder" element={<JobFinderPage />} />
+          <Route path="/jobs/compatibility" element={<JobCompatibilityPage />} />
         </Route>
       </Routes>
     </Router>
