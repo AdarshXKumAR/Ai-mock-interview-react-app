@@ -16,7 +16,6 @@ export const ThemeToggle = () => {
     }
   }, [dark]);
 
-  // Sync with system preference on first load
   useEffect(() => {
     const saved = localStorage.getItem("theme");
     if (saved === "dark") {
@@ -54,7 +53,7 @@ export const ThemeToggle = () => {
           alignItems: "center",
           position: "relative",
           width: "3.25rem",
-          height: "1.65rem",
+          height: "1.75rem",
           borderRadius: "9999px",
           background: dark ? "#1e293b" : "#f1f5f9",
           border: `1.5px solid ${dark ? "#475569" : "#cbd5e1"}`,
@@ -63,77 +62,55 @@ export const ThemeToggle = () => {
           flexShrink: 0,
         }}
       >
-        {/* sliding thumb */}
+        {/* sliding thumb — carries the single icon */}
         <span
           style={{
             position: "absolute",
-            left: dark ? "calc(100% - 1.4rem)" : "0.17rem",
-            width: "1.28rem",
-            height: "1.28rem",
+            left: dark ? "calc(100% - 1.45rem)" : "0.18rem",
+            width: "1.35rem",
+            height: "1.35rem",
             borderRadius: "9999px",
             background: dark ? "#6366f1" : "#f59e0b",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            transition: "left 0.35s cubic-bezier(0.34,1.56,0.64,1), background 0.35s ease",
+            transition:
+              "left 0.38s cubic-bezier(0.34,1.56,0.64,1), background 0.35s ease",
             boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
-            zIndex: 2,
           }}
         >
           {dark ? (
             <Moon
+              key="moon"
               style={{
-                width: "0.7rem",
-                height: "0.7rem",
+                width: "0.72rem",
+                height: "0.72rem",
                 color: "#fff",
-                animation: "themePopIn 0.35s ease",
+                animation: "togglePopIn 0.35s ease",
               }}
             />
           ) : (
             <Sun
+              key="sun"
               style={{
-                width: "0.7rem",
-                height: "0.7rem",
+                width: "0.72rem",
+                height: "0.72rem",
                 color: "#fff",
-                animation: "themeSpinIn 0.4s ease",
+                animation: "toggleSpinIn 0.4s ease",
               }}
             />
           )}
         </span>
-
-        {/* ghost icons in track bg */}
-        <Moon
-          style={{
-            position: "absolute",
-            left: "0.28rem",
-            width: "0.65rem",
-            height: "0.65rem",
-            color: dark ? "#334155" : "#94a3b8",
-            zIndex: 1,
-            transition: "color 0.3s",
-          }}
-        />
-        <Sun
-          style={{
-            position: "absolute",
-            right: "0.28rem",
-            width: "0.65rem",
-            height: "0.65rem",
-            color: dark ? "#334155" : "#94a3b8",
-            zIndex: 1,
-            transition: "color 0.3s",
-          }}
-        />
       </span>
 
       <style>{`
-        @keyframes themeSpinIn {
+        @keyframes toggleSpinIn {
           from { transform: rotate(-80deg) scale(0.4); opacity: 0; }
-          to   { transform: rotate(0deg) scale(1);   opacity: 1; }
+          to   { transform: rotate(0deg)  scale(1);   opacity: 1; }
         }
-        @keyframes themePopIn {
+        @keyframes togglePopIn {
           from { transform: scale(0.3) rotate(15deg); opacity: 0; }
-          to   { transform: scale(1) rotate(0deg);   opacity: 1; }
+          to   { transform: scale(1)   rotate(0deg);  opacity: 1; }
         }
       `}</style>
     </button>
