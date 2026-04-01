@@ -11,7 +11,6 @@ import {
   Briefcase,
   Star,
   ExternalLink,
-  Send,
   MapPin,
   Clock,
   Building2,
@@ -41,6 +40,18 @@ import {
   validateResumeFile,
 } from "@/lib/resume-extractor";
 
+// LinkedIn SVG logo
+const LinkedInLogo = () => (
+  <svg
+    className="w-4 h-4 shrink-0"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden="true"
+  >
+    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+  </svg>
+);
+
 const formSchema = z.object({
   jobRole: z.string().min(2, "Job role is required"),
   description: z.string().min(10, "Please describe what you are looking for"),
@@ -65,8 +76,7 @@ interface JobMatch {
   description: string;
   whyGoodFit: string;
   postedDate: string;
-  applyUrl: string;
-  linkedinUrl: string;
+  linkedinSearchUrl: string;
   tags: string[];
 }
 
@@ -90,25 +100,24 @@ const jobTypeColor = (type: string) => {
   return "bg-gray-50 text-gray-700 border-gray-200";
 };
 
+// Build a LinkedIn job search URL from title + company + location
+const buildLinkedInUrl = (title: string, company: string, location?: string) => {
+  const keywords = encodeURIComponent(`${title} ${company}`.trim());
+  const loc = location ? `&location=${encodeURIComponent(location)}` : "";
+  return `https://www.linkedin.com/jobs/search/?keywords=${keywords}${loc}&sortBy=R`;
+};
+
 const JobCard = ({ job }: { job: JobMatch }) => {
   const [expanded, setExpanded] = useState(false);
 
+  const linkedinUrl = buildLinkedInUrl(job.title, job.company, job.location);
+
   const handleApply = () => {
-    const q = encodeURIComponent(`${job.title} ${job.company}`);
-    window.open(
-      `https://www.linkedin.com/jobs/search/?keywords=${q}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    window.open(linkedinUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleViewDetails = () => {
-    const q = encodeURIComponent(`${job.title} ${job.company} ${job.location}`);
-    window.open(
-      `https://www.linkedin.com/jobs/search/?keywords=${q}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    window.open(linkedinUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -145,11 +154,13 @@ const JobCard = ({ job }: { job: JobMatch }) => {
         <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${jobTypeColor(job.jobType)}`}>
           {job.jobType}
         </span>
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Clock className="w-3 h-3" />
-          {job.postedDate}
-        </span>
-        {job.salary && job.salary !== "Not disclosed" && (
+        {job.experienceRequired && (
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="w-3 h-3" />
+            {job.experienceRequired}
+          </span>
+        )}
+        {job.salary && job.salary !== "Not disclosed" && job.salary !== "N/A" && (
           <span className="text-xs text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
             {job.salary}
           </span>
@@ -181,14 +192,17 @@ const JobCard = ({ job }: { job: JobMatch }) => {
       </div>
 
       <div className="flex items-center gap-2 pt-1 border-t">
+        {/* Apply with LinkedIn */}
         <Button
           size="sm"
-          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+          className="flex-1 bg-[#0A66C2] hover:bg-[#004182] text-white gap-1.5"
           onClick={handleApply}
         >
-          <Send className="w-3.5 h-3.5" />
-          Apply Now
+          <LinkedInLogo />
+          Apply with LinkedIn
         </Button>
+
+        {/* View Details */}
         <Button
           size="sm"
           variant="outline"
@@ -196,8 +210,9 @@ const JobCard = ({ job }: { job: JobMatch }) => {
           onClick={handleViewDetails}
         >
           <ExternalLink className="w-3.5 h-3.5" />
-          View on LinkedIn
+          View Details
         </Button>
+
         <Button
           size="sm"
           variant="ghost"
@@ -284,7 +299,7 @@ export const JobFinderPage = () => {
         ? `Preferred location: ${data.location}`
         : "Location: flexible / remote preferred";
 
-      const prompt = `You are a job matching expert with real job market knowledge. Generate exactly 6 realistic job listings that match this candidate's profile.
+      const prompt = `You are a job matching expert. Generate exactly 6 realistic job listings that closely match this candidate's profile. The jobs must be believable and based on real hiring patterns at well-known companies.
 
 Candidate Profile:
 - Desired role: ${data.jobRole}
@@ -292,37 +307,35 @@ Candidate Profile:
 - Years of experience: ${data.experience}
 - Tech stack: ${data.techStack}
 - ${locationHint}
-- Include internships: ${data.includeInternships ? "Yes" : "No"}
+- Include internships: ${data.includeInternships ? "Yes — include at least 2 internship roles" : "No"}
 ${resumeSection}
 
-Return ONLY a valid JSON array of exactly 6 objects. No markdown, no code fences, no extra text. Just the raw JSON array starting with [ and ending with ]:
+Return ONLY a valid JSON array of exactly 6 objects. No markdown, no code fences, no extra text. Just the raw JSON array:
 [
   {
-    "title": "Exact job title",
-    "company": "Real well-known tech company (Google, Stripe, Shopify, Vercel, Notion, Figma, Airbnb, Netflix, Spotify, GitHub, Atlassian, Twilio, Cloudflare, etc.)",
-    "location": "City, Country or Remote",
+    "title": "Exact realistic job title matching the candidate's desired role",
+    "company": "Name of a well-known real tech company (e.g. Google, Stripe, Shopify, Vercel, Notion, Figma, Airbnb, Netflix, Spotify, GitHub, Atlassian, Twilio, Cloudflare, Coinbase, Databricks, etc.)",
+    "location": "Realistic location for that company (e.g. 'Remote', 'San Francisco, CA', 'New York, NY', 'London, UK')",
     "matchScore": 85,
-    "matchedSkills": ["skill1", "skill2", "skill3"],
-    "missingSkills": ["missing1", "missing2"],
+    "matchedSkills": ["skill from candidate's stack that matches", "skill2", "skill3"],
+    "missingSkills": ["skill the job needs that candidate lacks", "skill2"],
     "experienceRequired": "2-4 years",
     "jobType": "Full-time",
     "salary": "$90,000 - $130,000/yr",
-    "description": "2-3 sentence realistic job description mentioning specific technologies.",
-    "whyGoodFit": "1-2 specific sentences about why this candidate fits this role.",
-    "postedDate": "2 days ago",
-    "applyUrl": "https://careers.google.com",
-    "linkedinUrl": "https://www.linkedin.com/jobs/search/?keywords=Software%20Engineer%20Google",
-    "tags": ["React", "Remote", "Series B"]
+    "description": "2-3 sentence realistic description of the actual role responsibilities using technologies the candidate knows.",
+    "whyGoodFit": "1-2 specific sentences explaining why this candidate's background fits this exact role.",
+    "postedDate": "3 days ago",
+    "tags": ["React", "Remote", "Fintech"]
   }
 ]
 
-Rules:
-- matchScore: integer 0-100
-- jobType: one of "Full-time", "Part-time", "Contract", "Internship", "Remote"
-- If includeInternships is true, include at least 2 internship entries
-- Mix large tech, mid-size product companies, and startups
-- Make salary ranges realistic for the role and experience level
-- For linkedinUrl use: https://www.linkedin.com/jobs/search/?keywords=TITLE%20COMPANY (URL-encode spaces as %20)`;
+Important rules:
+- matchScore must be an integer 0-100 based on how well the candidate's skills match
+- jobType must be one of: "Full-time", "Part-time", "Contract", "Internship", "Remote"
+- salary must be realistic for the role, experience, and location (use "Not disclosed" if unsure)
+- Use ONLY well-known, real company names — no fictional companies
+- matchedSkills and missingSkills must reference actual technologies from the candidate's tech stack and the job requirements
+- Do NOT include any URL fields — the app will generate LinkedIn search URLs automatically`;
 
       const aiResult = await chatSession.sendMessage(prompt);
       const parsed: JobMatch[] = cleanJson(aiResult.response.text());

@@ -13,10 +13,12 @@ import {
   AlertCircle,
   TrendingUp,
   ExternalLink,
-  Send,
   Building2,
   Sparkles,
   BookOpen,
+  Star,
+  MapPin,
+  Clock,
 } from "lucide-react";
 
 import { CustomBreadCrumb } from "@/components/custom-bread-crumb";
@@ -25,6 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Form,
   FormControl,
@@ -38,6 +41,18 @@ import {
   extractTextFromDocument,
   validateResumeFile,
 } from "@/lib/resume-extractor";
+
+// LinkedIn SVG logo
+const LinkedInLogo = () => (
+  <svg
+    className="w-4 h-4 shrink-0"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden="true"
+  >
+    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+  </svg>
+);
 
 const formSchema = z.object({
   jobTitle: z.string().min(2, "Job title is required"),
@@ -66,9 +81,13 @@ interface SimilarJob {
   title: string;
   company: string;
   location: string;
-  applyUrl: string;
-  linkedinUrl: string;
-  matchNote: string;
+  matchScore: number;
+  matchedSkills: string[];
+  missingSkills: string[];
+  experienceRequired: string;
+  jobType: string;
+  salary: string;
+  whyGoodFit: string;
 }
 
 interface CompatibilityResult {
@@ -100,6 +119,32 @@ const scoreToBarColor = (score: number) => {
   if (score >= 75) return "bg-emerald-500";
   if (score >= 50) return "bg-amber-400";
   return "bg-red-400";
+};
+
+const scoreCardColor = (score: number) => {
+  if (score >= 80) return "text-emerald-600 bg-emerald-50 border-emerald-200";
+  if (score >= 60) return "text-amber-600 bg-amber-50 border-amber-200";
+  return "text-red-500 bg-red-50 border-red-200";
+};
+
+const scoreBarCardColor = (score: number) => {
+  if (score >= 80) return "bg-emerald-500";
+  if (score >= 60) return "bg-amber-400";
+  return "bg-red-400";
+};
+
+const jobTypeColor = (type: string) => {
+  const t = (type || "").toLowerCase();
+  if (t.includes("intern")) return "bg-purple-50 text-purple-700 border-purple-200";
+  if (t.includes("remote")) return "bg-sky-50 text-sky-700 border-sky-200";
+  if (t.includes("contract")) return "bg-orange-50 text-orange-700 border-orange-200";
+  return "bg-gray-50 text-gray-700 border-gray-200";
+};
+
+const buildLinkedInUrl = (title: string, company: string, location?: string) => {
+  const keywords = encodeURIComponent(`${title} ${company}`.trim());
+  const loc = location ? `&location=${encodeURIComponent(location)}` : "";
+  return `https://www.linkedin.com/jobs/search/?keywords=${keywords}${loc}&sortBy=R`;
 };
 
 const CircularScore = ({ score }: { score: number }) => {
@@ -139,6 +184,109 @@ const CircularScore = ({ score }: { score: number }) => {
   );
 };
 
+// Similar job card styled the same as Job Finder
+const SimilarJobCard = ({ job }: { job: SimilarJob }) => {
+  const linkedinUrl = buildLinkedInUrl(job.title, job.company, job.location);
+
+  const handleApply = () =>
+    window.open(linkedinUrl, "_blank", "noopener,noreferrer");
+
+  return (
+    <div className="p-5 rounded-xl border bg-card space-y-3 hover:shadow-md hover:border-emerald-200 transition-all duration-200 group">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-base text-gray-900 group-hover:text-emerald-700 transition-colors truncate">
+            {job.title}
+          </h3>
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <span className="text-sm text-muted-foreground">{job.company}</span>
+            <span className="text-muted-foreground/40">·</span>
+            <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <span className="text-sm text-muted-foreground truncate">{job.location}</span>
+          </div>
+        </div>
+        {job.matchScore != null && (
+          <div
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full border text-sm font-bold shrink-0 ${scoreCardColor(job.matchScore)}`}
+          >
+            <Star className="w-3.5 h-3.5" />
+            {job.matchScore}%
+          </div>
+        )}
+      </div>
+
+      {job.matchScore != null && (
+        <div className="w-full h-1.5 rounded-full bg-gray-100">
+          <div
+            className={`h-1.5 rounded-full transition-all duration-500 ${scoreBarCardColor(job.matchScore)}`}
+            style={{ width: `${job.matchScore}%` }}
+          />
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {job.jobType && (
+          <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${jobTypeColor(job.jobType)}`}>
+            {job.jobType}
+          </span>
+        )}
+        {job.experienceRequired && (
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="w-3 h-3" />
+            {job.experienceRequired}
+          </span>
+        )}
+        {job.salary && job.salary !== "Not disclosed" && job.salary !== "N/A" && (
+          <span className="text-xs text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+            {job.salary}
+          </span>
+        )}
+      </div>
+
+      {job.whyGoodFit && (
+        <p className="text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-100 leading-relaxed">
+          <Sparkles className="w-3.5 h-3.5 inline mr-1.5 text-emerald-500" />
+          {job.whyGoodFit}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-1.5">
+        {(job.matchedSkills || []).slice(0, 4).map((s) => (
+          <Badge key={s} variant="outline" className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50">
+            ✓ {s}
+          </Badge>
+        ))}
+        {(job.missingSkills || []).slice(0, 2).map((s) => (
+          <Badge key={s} variant="outline" className="text-xs text-red-500 border-red-200 bg-red-50">
+            ✗ {s}
+          </Badge>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 pt-1 border-t">
+        <Button
+          size="sm"
+          className="flex-1 bg-[#0A66C2] hover:bg-[#004182] text-white gap-1.5"
+          onClick={handleApply}
+        >
+          <LinkedInLogo />
+          Apply with LinkedIn
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 gap-1.5 hover:border-sky-300 hover:text-sky-700"
+          onClick={handleApply}
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          View Details
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 export const JobCompatibilityPage = () => {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeText, setResumeText] = useState("");
@@ -166,7 +314,9 @@ export const JobCompatibilityPage = () => {
       setExtractingResume(true);
       const text = await extractTextFromDocument(file);
       if (text.length < 50) {
-        toast.error("Resume too short", { description: "Could not extract enough text." });
+        toast.error("Resume too short", {
+          description: "Could not extract enough text. Please try a text-based PDF or upload a TXT file.",
+        });
         return;
       }
       setResumeFile(file);
@@ -174,7 +324,7 @@ export const JobCompatibilityPage = () => {
       toast.success("Resume uploaded", { description: "Text extracted successfully." });
     } catch (err) {
       toast.error("Extraction failed", {
-        description: err instanceof Error ? err.message : "Failed to extract text.",
+        description: err instanceof Error ? err.message : "Failed to extract text. Try converting your PDF to TXT.",
       });
     } finally {
       setExtractingResume(false);
@@ -206,9 +356,7 @@ export const JobCompatibilityPage = () => {
       setLoading(true);
       setResult(null);
 
-      const linkedinQuery = encodeURIComponent(`${data.jobTitle} ${data.company}`);
-
-      const prompt = `You are a senior career advisor. Provide a detailed compatibility analysis between this resume and job description.
+      const prompt = `You are a senior career advisor. Provide a detailed, honest compatibility analysis between this resume and job description.
 
 Job Title: ${data.jobTitle}
 Company: ${data.company}
@@ -219,52 +367,60 @@ ${data.jobDescription}
 Candidate Resume:
 ${resumeText}
 
-Return ONLY a valid JSON object. No markdown, no code fences, no extra text. Just the raw JSON object starting with { and ending with }:
+Return ONLY a valid JSON object. No markdown, no code fences, no extra text. Just the raw JSON object:
 {
   "overallScore": 72,
-  "summary": "2-3 honest sentences summarising fit",
+  "summary": "2-3 honest sentences summarising fit based on the actual resume content vs job requirements",
   "verdict": "Strong candidate",
-  "strengths": ["specific strength from resume/JD", "strength 2", "strength 3"],
-  "weaknesses": ["specific gap", "gap 2", "gap 3"],
+  "strengths": ["specific strength drawn from resume matching JD", "strength 2", "strength 3"],
+  "weaknesses": ["specific gap between resume and JD", "gap 2", "gap 3"],
   "categoryScores": [
-    { "category": "Technical Skills", "score": 80, "notes": "specific observation" },
+    { "category": "Technical Skills", "score": 80, "notes": "specific observation referencing actual technologies" },
     { "category": "Experience Level", "score": 65, "notes": "specific observation" },
     { "category": "Domain Knowledge", "score": 70, "notes": "specific observation" },
     { "category": "Soft Skills", "score": 75, "notes": "specific observation" },
     { "category": "Education & Certs", "score": 60, "notes": "specific observation" }
   ],
   "improvements": [
-    { "skill": "specific skill", "priority": "high", "suggestion": "actionable suggestion", "resource": "learning resource name" },
+    { "skill": "specific skill from JD that candidate lacks", "priority": "high", "suggestion": "actionable suggestion", "resource": "e.g. Udemy, Coursera, official docs" },
     { "skill": "skill", "priority": "medium", "suggestion": "suggestion", "resource": "resource" },
     { "skill": "skill", "priority": "low", "suggestion": "suggestion", "resource": "resource" }
   ],
   "actionPlan": [
-    "Specific action step 1",
+    "Specific action step tailored to this candidate and role",
     "Step 2",
     "Step 3",
     "Step 4"
   ],
   "interviewTips": [
-    "Company-specific tip for ${data.company}",
-    "Role-specific tip for ${data.jobTitle}",
-    "General preparation tip"
+    "Tip specific to ${data.company}'s known interview style",
+    "Tip specific to the ${data.jobTitle} role requirements",
+    "General preparation tip based on the candidate's gaps"
   ],
   "similarJobs": [
     {
-      "title": "Similar role title",
-      "company": "Real alternative company",
-      "location": "Remote or City",
-      "applyUrl": "https://www.linkedin.com/jobs/search/?keywords=${linkedinQuery}",
-      "linkedinUrl": "https://www.linkedin.com/jobs/search/?keywords=${linkedinQuery}",
-      "matchNote": "Why this is a good alternative"
+      "title": "Similar realistic job title",
+      "company": "Well-known real tech company name",
+      "location": "Remote or realistic city",
+      "matchScore": 78,
+      "matchedSkills": ["skill candidate has that matches", "skill2"],
+      "missingSkills": ["skill the job needs that candidate lacks"],
+      "experienceRequired": "2-4 years",
+      "jobType": "Full-time",
+      "salary": "$85,000 - $120,000/yr",
+      "whyGoodFit": "Why this is a good alternative given the candidate's actual background"
     },
     {
-      "title": "Another similar role",
-      "company": "Another real company",
+      "title": "Another similar realistic role",
+      "company": "Another real well-known company",
       "location": "Remote",
-      "applyUrl": "https://www.linkedin.com/jobs/search/?keywords=${linkedinQuery}",
-      "linkedinUrl": "https://www.linkedin.com/jobs/search/?keywords=${linkedinQuery}",
-      "matchNote": "Match note"
+      "matchScore": 72,
+      "matchedSkills": ["skill1", "skill2"],
+      "missingSkills": ["missing skill"],
+      "experienceRequired": "1-3 years",
+      "jobType": "Full-time",
+      "salary": "$80,000 - $110,000/yr",
+      "whyGoodFit": "Match note based on candidate profile"
     }
   ]
 }
@@ -273,11 +429,19 @@ Rules:
 - verdict must be exactly one of: "Strong candidate", "Moderate fit", "Needs improvement"
 - improvements.priority must be exactly "high", "medium", or "low"
 - All scores are integers 0-100
-- Be specific — reference actual skills from resume and JD
-- interviewTips should be genuinely useful and specific to ${data.company}`;
+- overallScore must reflect the actual match — do not default to 0 or 100
+- Be specific — reference actual content from the resume and job description
+- similarJobs must have realistic matchScore values (not 0)
+- Use only real, well-known company names for similarJobs`;
 
       const aiResult = await chatSession.sendMessage(prompt);
       const parsed: CompatibilityResult = cleanJson(aiResult.response.text());
+
+      // Sanity check — if score is 0 something went wrong
+      if (!parsed || typeof parsed.overallScore !== "number" || parsed.overallScore === 0) {
+        throw new Error("AI returned an invalid score. Please try again.");
+      }
+
       setResult(parsed);
 
       toast.success("Analysis complete!", {
@@ -289,23 +453,20 @@ Rules:
       }, 100);
     } catch (err) {
       console.error(err);
-      toast.error("Error", { description: "Something went wrong. Please try again." });
+      toast.error("Error", {
+        description: err instanceof Error ? err.message : "Something went wrong. Please try again.",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleApplyDirect = () => {
-    const q = encodeURIComponent(`${form.getValues("jobTitle")} ${form.getValues("company")}`);
-    window.open(
-      `https://www.linkedin.com/jobs/search/?keywords=${q}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
-  };
+  const jobTitle = form.watch("jobTitle");
+  const company = form.watch("company");
 
-  const handleApplySimilar = (job: SimilarJob) => {
-    window.open(job.linkedinUrl || job.applyUrl, "_blank", "noopener,noreferrer");
+  const handleApplyDirect = () => {
+    const url = buildLinkedInUrl(jobTitle, company);
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -324,7 +485,7 @@ Rules:
       <Separator />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:items-start">
-        {/* LEFT — sticky form */}
+        {/* LEFT — sticky form (NO apply button here) */}
         <div className="lg:sticky lg:top-6 lg:self-start">
           <Form {...form}>
             <form
@@ -428,9 +589,21 @@ Rules:
                       <p className="text-sm text-muted-foreground">
                         {extractingResume ? "Extracting text..." : "Click to upload your resume"}
                       </p>
-                      <p className="text-xs text-muted-foreground">PDF or TXT · max 5 MB</p>
+                      <p className="text-xs text-muted-foreground">
+                        PDF or TXT · max 5 MB
+                      </p>
                     </label>
                   </div>
+                )}
+                {resumeFile && (
+                  <p className="text-xs text-muted-foreground">
+                    ✓ Resume text extracted and ready for analysis
+                  </p>
+                )}
+                {!resumeFile && (
+                  <p className="text-xs text-amber-600">
+                    Tip: If your PDF fails to parse, try saving it as a TXT file for best results.
+                  </p>
                 )}
               </div>
 
@@ -446,19 +619,6 @@ Rules:
                 )}
                 {loading ? "Analysing..." : "Analyse Compatibility"}
               </Button>
-
-              {result && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full gap-2 border-sky-200 text-sky-700 hover:bg-sky-50"
-                  onClick={handleApplyDirect}
-                >
-                  <Send className="w-4 h-4" />
-                  Apply to {form.getValues("company")} on LinkedIn
-                  <ExternalLink className="w-3.5 h-3.5 opacity-60" />
-                </Button>
-              )}
             </form>
           </Form>
         </div>
@@ -473,7 +633,9 @@ Rules:
             <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
               <Loader className="w-8 h-8 animate-spin text-sky-500" />
               <p className="text-sm font-medium">Analysing your compatibility...</p>
-              <p className="text-xs text-muted-foreground/60">Comparing resume against job requirements</p>
+              <p className="text-xs text-muted-foreground/60">
+                Comparing your resume against job requirements
+              </p>
             </div>
           )}
 
@@ -491,7 +653,7 @@ Rules:
 
           {!loading && result && (
             <div className="space-y-5">
-              {/* Score + verdict + apply */}
+              {/* Score + verdict + single apply button */}
               <div className="p-5 rounded-xl border bg-card flex flex-col items-center gap-3 text-center">
                 <CircularScore score={result.overallScore} />
                 <span
@@ -508,13 +670,13 @@ Rules:
                 <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
                   {result.summary}
                 </p>
+                {/* Single apply button — only in results panel */}
                 <Button
-                  className="w-full max-w-xs bg-sky-600 hover:bg-sky-700 gap-2"
+                  className="w-full max-w-xs bg-[#0A66C2] hover:bg-[#004182] text-white gap-2"
                   onClick={handleApplyDirect}
                 >
-                  <Send className="w-4 h-4" />
-                  Apply to {form.getValues("company")}
-                  <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+                  <LinkedInLogo />
+                  Apply with LinkedIn
                 </Button>
               </div>
 
@@ -580,7 +742,7 @@ Rules:
                 {result.improvements.map((imp, i) => (
                   <div
                     key={i}
-                    className={`p-3 rounded-lg border text-sm space-y-1 ${priorityColors[imp.priority]}`}
+                    className={`p-3 rounded-lg border text-sm space-y-1 ${priorityColors[imp.priority] || priorityColors.low}`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold">{imp.skill}</span>
@@ -622,7 +784,7 @@ Rules:
                 <div className="p-5 rounded-xl border bg-sky-50 border-sky-100 space-y-3">
                   <h3 className="font-semibold text-sm text-sky-800 flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-sky-500" />
-                    Interview Tips for {form.getValues("company")}
+                    Interview Tips for {company}
                   </h3>
                   <ul className="space-y-2">
                     {result.interviewTips.map((tip, i) => (
@@ -635,55 +797,21 @@ Rules:
                 </div>
               )}
 
-              {/* Similar jobs */}
+              {/* Similar jobs — Job Finder card style */}
               {result.similarJobs?.length > 0 && (
-                <div className="p-5 rounded-xl border bg-card space-y-3">
-                  <h3 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-emerald-500" />
-                    Similar Jobs You Can Apply To
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-emerald-500" />
+                      Similar Jobs You Can Apply To
+                    </h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground px-1">
                     Based on your profile, these alternative roles may be great fits too.
                   </p>
-                  <div className="space-y-3">
-                    {result.similarJobs.map((job, i) => (
-                      <div
-                        key={i}
-                        className="p-4 rounded-lg border bg-muted/30 space-y-2 hover:border-emerald-200 transition-colors"
-                      >
-                        <div>
-                          <p className="font-semibold text-sm text-gray-800">{job.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {job.company} · {job.location}
-                          </p>
-                        </div>
-                        <p className="text-xs text-emerald-700 bg-emerald-50 rounded px-2 py-1.5 border border-emerald-100">
-                          {job.matchNote}
-                        </p>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            className="flex-1 h-8 text-xs bg-emerald-600 hover:bg-emerald-700 gap-1"
-                            onClick={() => handleApplySimilar(job)}
-                          >
-                            <Send className="w-3 h-3" />
-                            Apply
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 h-8 text-xs gap-1 hover:border-sky-300 hover:text-sky-700"
-                            onClick={() =>
-                              window.open(job.linkedinUrl, "_blank", "noopener,noreferrer")
-                            }
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            View on LinkedIn
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {result.similarJobs.map((job, i) => (
+                    <SimilarJobCard key={i} job={job} />
+                  ))}
                 </div>
               )}
             </div>
